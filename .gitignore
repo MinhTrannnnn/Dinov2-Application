@@ -6,12 +6,6 @@ node_modules/
 dist/
 .vite/
 
-data/gallery/*
-data/normal/*
-data/index/*
 data/uploads/*
 data/raw/*
-!data/gallery/.gitkeep
-!data/normal/.gitkeep
-!data/index/.gitkeep
 !data/uploads/.gitkeep
