@@ -1,0 +1,41 @@
+\chapter{GIỚI THIỆU ĐỀ TÀI}
+\section{Đặt vấn đề}
+Trong những năm gần đây, Thị giác máy tính (Computer Vision) đã đạt được những bước tiến nhảy vọt nhờ vào sự phát triển của Học sâu (Deep Learning) và kiến trúc mạng thần kinh nhân tạo. Các bài toán kinh điển như phân loại hình ảnh, phân đoạn ngữ nghĩa, phát hiện vật thể hay ước lượng chiều sâu đã và đang được ứng dụng rộng rãi trong nhiều lĩnh vực thực tiễn như y tế thông minh, xe tự hành, an ninh và robot công nghiệp.
+
+Tuy nhiên, phần lớn các thành tựu này dựa trên phương pháp Học giám sát (Supervised Learning) truyền thống. Phương pháp này đòi hỏi một lượng lớn dữ liệu được gán nhãn thủ công (như bộ dữ liệu ImageNet hay COCO). Việc phụ thuộc vào nhãn dán bộc lộ ba hạn chế cốt lõi:
+\begin{itemize}
+    \item \textbf{Chi phí và thời gian:} Việc gán nhãn chính xác ở cấp độ pixel (cho bài toán phân đoạn) hoặc cấp độ hộp bao (cho bài toán phát hiện vật thể) tốn kém rất nhiều nguồn lực và nhân công.
+    \item \textbf{Tính chuyên gia:} Trong các lĩnh vực đặc thù như ảnh y tế (X-quang, MRI) hay ảnh vệ tinh, việc gán nhãn bắt buộc phải do các chuyên gia có trình độ cao thực hiện, khiến nguồn dữ liệu nhãn sạch càng trở nên khan hiếm.
+    \item \textbf{Tính thiên lệch (Bias):} Mô hình học giám sát chỉ tối ưu hóa tốt trên phân phối dữ liệu của tập nhãn cụ thể, dẫn đến khả năng tổng quát hóa kém (Generalization) khi đối mặt với dữ liệu thực tế nằm ngoài phân phối (Out-of-Distribution).
+\end{itemize}
+
+Để giải quyết bài toán này, xu hướng nghiên cứu dịch chuyển mạnh mẽ sang \textbf{Tự học giám sát (Self-Supervised Learning - SSL)}. SSL cho phép mô hình tự khai phá cấu trúc nội tại của dữ liệu thô không nhãn để học ra các biểu diễn đặc trưng mạnh mẽ. Đỉnh cao của xu hướng này là sự ra đời của các \textbf{Mô hình nền tảng (Foundation Models)} cho thị giác máy tính.
+
+Tháng 4 năm 2023, Meta AI đã giới thiệu \textbf{DINOv2} – một bước đột phá trong trường phái SSL. Không giống như các mô hình học đa phương thức như CLIP (đòi hỏi cặp dữ liệu ảnh - văn bản), DINOv2 thuần túy học trực tiếp từ hình ảnh thông qua tập dữ liệu khổng lồ LVD-142M. Đặc trưng (features) do DINOv2 trích xuất ra được đánh giá là mang tính "vạn năng" (universal features) – nghĩa là chỉ cần giữ cố định mô hình gốc (Frozen Backbone) và thêm các bộ giải mã tuyến tính đơn giản, hệ thống vẫn đạt hoặc vượt hiệu năng của các mô hình học giám sát chuyên biệt trên nhiều tác vụ hạ nguồn từ thô đến mịn \cite{oquab2024dinov2learningrobustvisual}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/1.1.png}
+    \caption{Tổng quan data processing pipeline của DINOv2}
+\end{figure}
+\section{Mục tiêu nghiên cứu}
+\begin{itemize}
+    \item \textbf{Mục tiêu lý thuyết:} Nghiên cứu sâu sắc, toàn diện về kiến trúc hệ thống, cơ chế học tập tương phản/không tương phản, hàm mất mát đa mục tiêu và các kỹ thuật tối ưu hóa độ ổn định mạng mạng của mô hình DINOv2. Làm rõ sự tiến hóa công nghệ từ các thế hệ tiền nhiệm (DINO v1, iBOT) để thấy được nguyên nhân thành công của DINOv2.
+    \item \textbf{Mục tiêu thực nghiệm:} Ứng dụng thành công mô hình DINOv2 làm bộ trích xuất đặc trưng nền tảng để giải quyết một số tác vụ thị giác cụ thể (như phân loại ảnh, phân đoạn ngữ nghĩa hoặc ước lượng chiều sâu). Đánh giá định lượng và định tính hiệu năng của giải pháp đề xuất, chứng minh khả năng chuyển đổi tri thức (Transfer Learning) vượt trội của mô hình.
+\end{itemize}
+
+\section{Đối tượng và phạm vi nghiên cứu}
+\begin{itemize}
+    \item \textbf{Đối tượng nghiên cứu:}
+    \begin{itemize}
+        \item Thuật toán và mô hình nền tảng DINOv2 do Meta AI phát triển.
+        \item Các biến thể kiến trúc Vision Transformer (ViT) đi kèm: ViT-Small (ViT-S), ViT-Base (ViT-B), ViT-Large (ViT-L).
+        \item Các phương pháp tích hợp hạ nguồn (Downstream Evaluation): Học tuyến tính (Linear Probing), Đánh giá lân cận k-NN (k-NN Classification) và các bộ giải mã dự đoán mật độ (Dense Prediction Decoders).
+    \end{itemize}
+    \item \textbf{Phạm vi nghiên cứu:}
+    \begin{itemize}
+        \item Tập trung vào phương pháp tiếp cận đóng băng mạng xương sống (Frozen Backbone) để trích xuất đặc trưng vạn năng, không thực hiện fine-tune toàn bộ tham số của DINOv2 nhằm tối ưu hóa chi phí tính toán.
+        \item Thực nghiệm giới hạn trên một số tác vụ đại diện: Code lại mô hình ở dạng tổng quát trên bộ dữ liệu Tiny ImageNet.
+    \end{itemize}
+\end{itemize}
+

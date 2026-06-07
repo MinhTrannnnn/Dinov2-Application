@@ -1,0 +1,313 @@
+\chapter{CƠ SỞ LÍ THUYẾT}
+\section{Tổng quan về Tự học giám sát (Self-Supervised Learning - SSL)}
+\subsection{Khái niệm và động lực phát triển}
+Học sâu (Deep Learning) trong Thị giác máy tính đã đạt được những thành tựu rực rỡ phần lớn nhờ vào sự phát triển của Học giám sát (Supervised Learning). Tuy nhiên, phương pháp này đang dần chạm tới giới hạn do sự phụ thuộc tuyệt đối vào các tập dữ liệu lớn được gán nhãn thủ công như ImageNet hay COCO. Việc gán nhãn thủ công bộc lộ những thách thức lớn về chi phí kinh tế, thời gian, tính thiên lệch (bias) của người gán nhãn, và đặc biệt bế tắc trong các lĩnh vực chuyên biệt như ảnh y tế hay ảnh vệ tinh.
+
+Tự học giám sát (Self-Supervised Learning - SSL) ra đời như một lời giải cho bài toán khan hiếm nhãn sạch. SSL là một nhánh của Học máy mà trong đó mô hình tự tạo ra tín hiệu giám sát từ chính dữ liệu thô không nhãn.
+
+\textbf{Bản chất của SSL:} Quá trình huấn luyện được chia làm hai giai đoạn rõ rệt:
+\begin{itemize}
+    \item \textbf{Huấn luyện tiên quyết (Pre-training / Pretext task):} Mô hình giải quyết một bài toán phụ do hệ thống tự thiết lập dựa trên cấu trúc của dữ liệu (ví dụ: đoán góc xoay của ảnh, khôi phục vùng ảnh bị che). Qua đó, mô hình tự học cách trích xuất ra các không gian biểu diễn đặc trưng (Representation Learning) chứa đựng ngữ cảnh và ngữ nghĩa sâu sắc của hình ảnh.
+    \item \textbf{Ứng dụng hạ nguồn (Downstream tasks):} Trọng số (weights) đã học được từ giai đoạn pre-train sẽ được chuyển giao (Transfer Learning) sang các bài toán thực tế như Phân loại, Phân đoạn hay Phát hiện vật thể bằng cách đóng băng mạng xương sống (Frozen Backbone) hoặc tinh chỉnh (Fine-tuning) với một lượng rất nhỏ dữ liệu có nhãn.
+\end{itemize}
+\subsection{Các hướng tiếp cận chính trong SSL cho Thị giác máy tính}
+Lịch sử phát triển của SSL trong thị giác máy tính trải qua nhiều trường phái thuật toán khác nhau, trong đó có ba hướng tiếp cận cốt lõi đóng vai trò nền tảng tạo nên sự thành công của các mô hình lớn hiện nay:
+\subsubsection{Học tương phản (Contrastive Learning)}
+Học tương phản tiếp cận bài toán bằng cách tối ưu hóa khoảng cách hình học giữa các vector biểu diễn trong không gian nhúng (Embedding space).
+\begin{itemize}
+    \item \textbf{Cơ chế hoạt động:} Từ một bức ảnh gốc $x$, hệ thống áp dụng các kỹ thuật tăng cường dữ liệu (Data Augmentation) ngẫu nhiên để tạo ra hai biến thể (views) khác nhau là $x_i$ (mẫu tích cực - positive sample) và $x_j$ (mẫu tiêu cực - negative sample, lấy từ một bức ảnh hoàn toàn khác). Mục tiêu của mạng là kéo các vector biểu diễn của cặp mẫu tích cực lại gần nhau và đẩy vector của các mẫu tiêu cực ra xa nhau.
+    \item \textbf{Hàm mất mát điển hình:} Thường sử dụng hàm InfoNCE (Information Noise-Contrastive Estimation): $$\mathcal{L}_{i,j} = -\log \dfrac{\exp \left(\dfrac{\text{sim}(z_i, z_j)}{\tau} \right)}{\sum_{k=1}^{2N} \mathbb{I}_{[k \neq i]} \exp \left(\dfrac{\text{sim}(z_i, z_k)}{\tau} \right)}$$
+    \textit{Trong đó: $\text{sim}(\cdot)$ là độ tương đồng Cosine, $\tau$ là tham số nhiệt độ (temperature), và $N$ là kích thước batch.}
+    \item \textbf{Hạn chế:} Trường phái này (đại diện là SimCLR, MoCo) phụ thuộc rất lớn vào kích thước bộ nhớ đệm (Memory Bank) hoặc kích thước Batch size cực lớn để chứa nhiều mẫu tiêu cực. Nếu không có đủ mẫu tiêu cực chất lượng, mô hình sẽ rơi vào trạng thái Sụp đổ biểu diễn (Representation Collapse) — hiện tượng mô hình học mẹo bằng cách xuất ra cùng một vector hằng số cho mọi bức ảnh để tối ưu hóa hàm loss.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/2.1.png}
+    \caption{Ví dụ về Contrastive Learning}
+\end{figure}
+
+\subsubsection{Học không tương phản (Non-contrastive Learning)}
+Để khắc phục nhược điểm phụ thuộc vào mẫu tiêu cực của Học tương phản, trường phái Học không tương phản (đại diện là BYOL, SimSiam) chứng minh rằng: \textbf{Chỉ cần học từ các mẫu tích cực (positive-only) vẫn có thể tạo ra đặc trưng mạnh mẽ mà không bị sụp đổ biểu diễn.}
+
+\begin{itemize}
+    \item \textbf{Cơ chế hoạt động:} Hệ thống sử dụng kiến trúc mạng song sinh (Siamese Network) gồm hai nhánh: Mạng trực tuyến (Online Network) và Mạng mục tiêu (Target Network). Hai nhánh nhận hai view khác nhau của cùng một bức ảnh. Mạng Online sẽ cố gắng dự đoán đầu ra của mạng Target.
+    \item \textbf{Cơ chế chống sụp đổ (Collapse Prevention):} Thay vì dùng mẫu tiêu cực để đẩy các ảnh khác nhau ra xa, các mạng này dùng các kỹ thuật bất đối xứng kiến trúc (Asymmetric architecture) bao gồm:
+    \begin{itemize}
+        \item Thêm một khối dự đoán (Predictor) chỉ ở bên nhánh Online.
+        \item Sử dụng toán tử \textbf{Stop-gradient} (không truyền ngược sai số) qua nhánh Target.
+        \item Cập nhật trọng số của mạng Target bằng phương pháp Trung bình trượt cấp số nhân (Exponential Moving Average - EMA) từ mạng Online.
+    \end{itemize}
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/2.2.jpg}
+    \caption{Ví dụ về Non-contrastive Learning}
+\end{figure}
+
+\subsubsection{Học che ảnh (Masked Image Modeling - MIM)}
+\textbf{Học che ảnh (Masked Image Modeling - MIM)} là một trong những bước đột phá quan trọng nhất trong học tự giám sát (SSL) cho thị giác máy tính giai đoạn 2022–2026. Trường phái này dịch chuyển tư duy huấn luyện từ việc "so sánh hai bức ảnh" (của Học tương phản) sang việc "hiểu cấu trúc nội tại của một bức ảnh", được lấy cảm hứng trực tiếp từ mô hình ngôn ngữ BERT trong xử lý ngôn ngữ tự nhiên (NLP).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/2.3.png}
+    \caption{Ví dụ về Masked Image Modeling}
+\end{figure}
+
+\paragraph{Ý tưởng cốt lõi và Sự dịch chuyển từ NLP sang Vision}
+Trong NLP, mô hình Masked Language Modeling (MLM) như BERT hoạt động bằng cách che đi một số từ trong câu và bắt mô hình đoán từ bị ẩn dựa vào ngữ cảnh xung quanh. Đối với hình ảnh, bản chất dữ liệu là liên tục và có tính dư thừa cao (các pixel cạnh nhau thường có màu sắc giống nhau). Do đó, MIM không che từng pixel đơn lẻ mà che đi các mảnh ảnh (patches).
+
+MIM buộc mạng nơ-ron phải phát triển một hiểu biết sâu sắc về cấu trúc hình học: nếu một nửa con mèo bị che khuất, mô hình phải học được quy luật phân phối không gian để hiểu rằng phần bị che chứa cái đuôi hoặc bàn chân.
+\paragraph{Kiến trúc tổng quát của hệ thống MIM}
+Một hệ thống MIM tiêu chuẩn (điển hình là MAE - Masked Autoencoders của Kaiming He hoặc SimMIM của Microsoft) gồm 4 bước xử lý chính:
+\begin{itemize}
+    \item \textbf{Bước 1. Phân mảnh ảnh (Patchification) và Nhúng vị trí}: Ảnh đầu vào $X \in \mathbb{R}^{H \times W \times C}$ được chia thành một chuỗi các mảnh ảnh không chồng lấp $X_p \in \mathbb{R}^{N \times (P^2 \cdot C)}$, với $(P, P)$ là kích thước mỗi mảnh (thường là $14 \times 14$ hoặc $16 \times 16$) và $N = \dfrac{HW}{P^2}$ là tổng số mảnh. Các mảnh này được chiếu tuyến tính thành các vector nhúng (Patch Embeddings) và cộng thêm Vector vị trí (Position Embedding).
+    \item \textbf{Bước 2. Chiến lược che (Masking Strategy)}: Hệ thống chọn ngẫu nhiên một tỷ lệ $c \in (0, 1)$ các mảnh ảnh để làm mặt nạ (mask).
+    \begin{itemize}
+        \item Trong NLP, tỷ lệ che của BERT thường chỉ là 15\%.
+        \item Trong Thị giác máy tính (MIM), tỷ lệ che tối ưu cực kỳ cao, thường từ 60\% đến 80\%.
+        \item \textbf{Lý do:} Hình ảnh có tính chất dư thừa thông tin rất lớn. Nếu chỉ che 15\%, mô hình có thể dễ dàng "quay cóp" bằng cách nội suy từ các pixel ngay sát cạnh mà không cần hiểu ngữ nghĩa của vật thể. Che tới 75\% ép mô hình phải học các đặc trưng ở cấp độ biểu diễn cao hơn (high-level representations).
+    \end{itemize}
+    \item \textbf{Bước 3. Mã hóa mảnh không che (Encoder)}: Bộ mã hóa (thường là một mạng Vision Transformer - ViT) chỉ nhận đầu vào là các mảnh ảnh không bị che (tương đương 25\% lượng ảnh còn lại). Việc loại bỏ các mảnh bị che giúp giảm tới 3/4 khối lượng tính toán, cho phép huấn luyện các mạng ViT khổng lồ (ViT-Large, ViT-Huge) với tốc độ rất nhanh. Bộ mã hóa xuất ra các vector đặc trưng ẩn (latent representations) cho các mảnh lộ diện này.
+    \item \textbf{Bước 4. Giải mã và khôi phục (Decoder \& Reconstruction)}: Hệ thống gộp các vector đặc trưng ẩn (từ bộ mã hóa) chung với các Token mặt nạ (Mask tokens - các vector có thể học được, đại diện cho các mảnh bị che ban đầu) theo đúng thứ tự vị trí không gian của bức ảnh gốc. Chuỗi vector đầy đủ này được đưa qua một bộ giải mã (Decoder) – thường là một mạng ViT nhỏ và nhẹ hơn. Nhiệm vụ của Decoder là dự đoán giá trị tại các vùng bị che.
+\end{itemize}
+\paragraph{Mục tiêu tối ưu hóa (Hàm mất mát)}
+MIM tối ưu hóa mô hình bằng cách tính toán sai số giữa vùng ảnh được khôi phục bởi Decoder và vùng ảnh gốc ban đầu. Hàm mất mát phổ biến nhất là Sai số bình phương trung bình (Mean Squared Error - MSE), chỉ tính trên các mảnh bị che (Masked patches): $$\mathcal{L}_{MIM} = \dfrac{1}{|M| \cdot P^2 \cdot C} \sum_{i \in M} \| \hat{X}_i - X_i \|^2$$
+
+Trong đó:
+\begin{itemize}
+    \item $M$ là tập hợp các chỉ số (indices) của các mảnh bị che.
+    \item $|M|$ là tổng số mảnh bị che.
+    \item $X_i$ là giá trị pixel gốc của mảnh thứ $i$.
+    \item $\hat{X}_i$ là giá trị pixel do mô hình dự đoán/khôi phục cho mảnh thứ $i$.
+\end{itemize}
+
+Cải tiến chuẩn hóa: Để nâng cao chất lượng đặc trưng, các nghiên cứu (như MAE) thường chuẩn hóa các pixel trong mỗi mảnh ảnh (Normalize pixels) trước khi tính MSE (trừ đi giá trị trung bình và chia cho độ lệch chuẩn của chính mảnh đó). Kỹ thuật này giúp mô hình tập trung vào việc học cấu trúc, hình dáng, độ tương phản cục bộ thay vì học các giá trị độ sáng tuyệt đối của bức ảnh.
+\paragraph{Hai cách khôi phục trong MIM}
+Tùy thuộc vào việc mô hình bắt Decoder phải khôi phục cái gì ở đầu ra, MIM được chia làm hai loại:
+\begin{itemize}
+    \item \textbf{Pixel-level Reconstruction (Khôi phục mức pixel):} Decoder phải tái tạo lại chính xác từng pixel thô (như mô hình MAE). Ưu điểm là trực quan, không cần mô hình phụ trợ, nhưng nhược điểm là mô hình dễ tốn tài nguyên để học các chi tiết nhiễu tần số cao (high-frequency noise) không quan trọng về mặt ngữ nghĩa.
+    \item \textbf{Feature-level Reconstruction (Khôi phục mức đặc trưng):} Thay vì khôi phục pixel thô, Decoder phải dự đoán vector đặc trưng ẩn của mảnh đó thông qua một mô hình trung gian (Tokenizer/Teacher). \textbf{iBOT và DINOv2} đi theo trường phái này. Chúng bắt mạng Học sinh (Student) phải đoán xem mạng Giáo viên (Teacher) sẽ nhìn thấy đặc trưng gì ở mảnh bị che đó. Cách tiếp cận này giúp đặc trưng học được mang tính ngữ nghĩa rất cao, cực kỳ có lợi cho các tác vụ hạ nguồn.
+\end{itemize}
+\paragraph{Ưu điểm và Nhược điểm của MIM}
+\begin{itemize}
+    \item \textbf{Ưu điểm:}
+    \begin{itemize}
+        \item \textbf{Hiểu chi tiết cấp độ mịn (Fine-grained/Dense Prediction):} Vì mô hình phải tối ưu hóa trên từng mảnh ảnh đơn lẻ, nó học được sự liên kết không gian cực tốt. Đặc trưng này giúp các tác vụ như Phân đoạn ngữ nghĩa (Semantic Segmentation) hay Ước lượng chiều sâu đạt độ chính xác ở cấp độ pixel mà các phương pháp Contrastive Learning (vốn chỉ học đặc trưng toàn cục của [CLS] token) khó làm được.
+        \item \textbf{Khả năng mở rộng (Scalability):} Tỷ lệ che cao giúp tiết kiệm bộ nhớ GPU, mở đường cho việc scale mô hình lên hàng tỷ tham số.
+    \end{itemize}
+    \item \textbf{Nhược điểm:}
+    \begin{itemize}
+        \item \textbf{Thiếu tính liên kết toàn cục nếu đứng độc lập:} Vì quá tập trung vào việc khôi phục các chi tiết cục bộ gần nhau, mạng có thể thiếu đi cái nhìn tổng quan (Global context) về toàn bộ bức ảnh.
+    \end{itemize}
+\end{itemize}
+\textbf{Giải pháp của DINOv2:} Để khắc phục nhược điểm này của MIM, DINOv2 sử dụng đồng thời hai hàm loss: Hàm loss của DINOv1 để học đặc trưng toàn cục (Image-level) và hàm loss của iBOT (MIM cấp độ đặc trưng) để học chi tiết cục bộ (Patch-level). Sự kết hợp này tạo nên một bộ trích xuất đặc trưng vạn năng và hoàn hảo.
+
+\section{Kiến trúc mạng Vision Transformer (ViT)}
+Kiến trúc Vision Transformer (ViT), được giới thiệu lần đầu bởi Dosovitskiy và các cộng sự (Google Brain) vào năm 2020, đã đánh dấu một bước ngoặt lịch sử trong Thị giác máy tính. Thay vì sử dụng các phép toán tích chập (Convolution) cục bộ của mạng CNN truyền thống, ViT áp dụng trực tiếp kiến trúc Transformer thuần túy dựa trên cơ chế Tự chú ý (Self-Attention) lên các chuỗi mảnh ảnh đầu vào.
+
+\subsection{Từ Transformer trong NLP đến Thị giác máy tính}
+Mạng tích chập truyền thống (CNN) hoạt động dựa trên hai giả định quy nạp cấu trúc (inductive biases): tính cục bộ (locality) và tính bất biến tịnh tiến (translation invariance). Điều này khiến CNN bị giới hạn ở trường thụ cảm (receptive field) nhỏ ở các tầng đầu và chỉ mở rộng dần ở các tầng sau.
+
+Ngược lại, ViT loại bỏ hoàn toàn các giả định quy nạp này. Nhờ vào cơ chế Tự chú ý toàn cục, ngay từ tầng đầu tiên, mọi vị trí trong bức ảnh đều có thể tương tác và kết nối thông tin trực tiếp với nhau. Sự dịch chuyển tư duy này được hiện thực hóa bằng cách coi các vùng không gian của hình ảnh tương tự như các token (từ) trong một câu văn bản.
+\subsection{Các thành phần khối chức năng của ViT}
+Kiến trúc tổng thể của một khối chức năng Vision Transformer (ViT) được thiết kế để xử lý tuần tự chuỗi dữ liệu sau khi đã qua bước nhúng vị trí ($Z_0$). Một tầng Transformer Encoder hoàn chỉnh bao gồm bốn thành phần khối chức năng cốt lõi được sắp xếp theo cấu trúc Tiền chuẩn hóa (Pre-LN): Tầng chuẩn hóa lớp (Layer Normalization), Tầng tự chú ý đa đầu (MHSA), Mạng truyền thẳng (MLP), và các Kết nối tắt (Residual Connections).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/2.4.jpeg}
+    \caption{Tổng quan kiến trúc ViT}
+\end{figure}
+
+\subsubsection{Tầng chuẩn hóa lớp (Layer Normalization - LN)}
+Khác với mạng CNN truyền thống thường sử dụng Chuẩn hóa Batch (Batch Normalization) dựa trên phân phối của cả một lô dữ liệu, ViT sử dụng \textbf{Layer Normalization (LN)}.
+\begin{itemize}
+    \item \textbf{Vị trí áp dụng:} ViT áp dụng cấu trúc Pre-LN, nghĩa là phép toán LN được thực hiện trước khi dòng dữ liệu đi vào tầng MHSA và tầng MLP. Kỹ thuật này đã được chứng minh là giúp ổn định quá trình lan truyền ngược gradient tốt hơn rất nhiều so với cấu trúc Post-LN, cho phép huấn luyện các mạng Transformer rất sâu mà không bị hiện tượng bùng nổ sai số.
+    \item \textbf{Cơ chế toán học:} LN tính toán giá trị trung bình $\mu$ và độ lệch chuẩn $\sigma$ trên tất cả các kênh tính năng (feature dimensions $D$) của từng token độc lập. Với một vector đặc trưng token $z \in \mathbb{R}^D$, LN chuẩn hóa nó theo công thức: $$\text{LN}(z) = \dfrac{z - \mu}{\sqrt{\sigma^2 + \epsilon}} \odot \gamma + \beta$$
+    \textit{Trong đó $\gamma, \beta \in \mathbb{R}^D$ là các tham số tỉ lệ và dịch chuyển có thể học được (learnable parameters), còn $\epsilon$ là một số thực cực nhỏ để tránh lỗi chia cho số 0.}
+\end{itemize}
+\subsubsection{Tầng Tự chú ý đa đầu (Multi-Head Self-Attention - MHSA)}
+Nằm ngay sau tầng LN thứ nhất, MHSA là khối chức năng quan trọng nhất chịu trách nhiệm thiết lập mối quan hệ ngữ cảnh giữa các mảnh ảnh.
+\begin{itemize}
+    \item Nó nhận chuỗi các token đã được chuẩn hóa, phân tách không gian $D$ chiều thành các không gian con (các đầu chú ý độc lập).
+    \item Tại đây, các toán tử Query, Key, Value tương tác chéo để tính toán ra Bản đồ chú ý (Attention Map). Bản đồ này cho phép mô hình biết được một patch ảnh (ví dụ: mắt con mèo) cần phải liên kết bao nhiêu phần trăm "sự chú ý" với các patch ảnh khác (ví dụ: tai, đuôi, hoặc nền) để hiểu được toàn bộ thực thể.
+\end{itemize}
+\subsubsection{Khối kết nối tắt (Residual Connections / Skip Connections)}
+Được kế thừa từ kiến trúc mạng ResNet, các kết nối tắt đóng vai trò thiết yếu trong việc duy trì và truyền tải thông tin nguyên bản của hình ảnh xuyên suốt các tầng ẩn sâu.
+\begin{itemize}
+    \item Mô hình thiết lập hai tuyến kết nối tắt độc lập trong một khối Encoder:
+    \begin{itemize}
+        \item Tuyến thứ nhất bao quanh khối MHSA.
+        \item Tuyến thứ hai bao quanh khối MLP.
+    \end{itemize}
+    \item \textbf{Tác dụng toán học:} Phép toán cộng residual ($+ Z_{l-1}$) tạo ra một "đường cao tốc" cho phép dòng gradient truyền ngược trực tiếp về các tầng đầu tiên mà không bị suy giảm thông qua phép nhân ma trận phức tạp. Điều này ngăn chặn triệt để hiện tượng tiêu biến gradient (vanishing gradient).
+\end{itemize}
+\subsubsection{Mạng truyền thẳng đa tầng (Multi-Layer Perceptron - MLP)}
+Sau khi các token đã trao đổi thông tin ngữ cảnh không gian qua tầng MHSA và được cộng residual, chuỗi đặc trưng tiếp tục đi qua tầng LN thứ hai và tiến vào khối MLP (còn được gọi là Feed-Forward Network - FFN).
+\begin{itemize}
+    \item \textbf{Cơ chế hoạt động:} Khối MLP được áp dụng độc lập và đồng nhất trên từng token riêng biệt (Position-wise). Nó không làm thay đổi số lượng token hay tương tác không gian giữa chúng, mà chỉ tập trung biến đổi và tối ưu hóa các đặc trưng phi tuyến tính bên trong nội tại từng token.
+    \item \textbf{Cấu trúc bên trong:} Khối MLP tiêu chuẩn gồm hai tầng tuyến tính (Linear Layers) được phân tách bằng một hàm kích hoạt phi tuyến:
+    \begin{itemize}
+        \item Tầng chiếu mở rộng (Linear Expansion): Ánh xạ vector token từ số chiều gốc $D$ lên một không gian ẩn lớn hơn (thường là $4D$).
+        \item Hàm kích hoạt phi tuyến: Thường sử dụng hàm \textbf{GELU (Gaussian Error Linear Unit)} hoặc hàm cải tiến \textbf{SwiGLU} (trong kiến trúc DINOv2) để mô hình hóa các hàm số phức tạp.
+        \item Tầng chiếu thu hẹp (Linear Contraction): Ánh xạ không gian $4D$ quay trở lại kích thước số chiều gốc $D$ để chuẩn bị đầu ra cho khối tiếp theo.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Cơ chế Tự chú ý đa đầu (Multi-Head Self-Attention - MHSA)}
+Cơ chế Tự chú ý đa đầu (MHSA) là động cơ tính toán quan trọng nhất trong kiến trúc Transformer. Khác với mạng CNN bị giới hạn bởi trường thụ cảm (receptive field) cục bộ của các bộ lọc tích chập, MHSA cho phép mô hình tính toán sự phụ thuộc và mối quan hệ ngữ cảnh giữa mọi cặp token trong ảnh (bất kể khoảng cách không gian hình học xa hay gần) ngay từ tầng ẩn đầu tiên.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{img/2.5.jpg}
+    \caption{Tổng quan về Multi-Head Self-Attention}
+\end{figure}
+
+\subsubsection{Cấu trúc toán học của cơ chế Tự chú ý đơn (Scaled Dot-Product Attention)}
+Để hiểu cách MHSA vận hành, trước hết ta xét không gian chú ý đơn lẻ. Giả sử ma trận đầu vào của một tầng Transformer là $Z \in \mathbb{R}^{(N+1) \times D}$, trong đó $N+1$ là tổng số token (bao gồm cả token [CLS]) và $D$ là số chiều biểu diễn đặc trưng.
+
+Từ ma trận gốc $Z$, mô hình sử dụng ba ma trận trọng số tuyến tính có thể học được là $W_Q, W_K, W_V \in \mathbb{R}^{D \times d_k}$ để ánh xạ dữ liệu thành ba ma trận đại diện tương ứng: Query (Q), Key (K), và Value (V).$$Q = Z \cdot W_Q, \quad K = Z \cdot W_K, \quad V = Z \cdot W_V$$
+
+\begin{itemize}
+    \item \textbf{Query ($Q$)}: Vector đại diện cho câu hỏi "Token hiện tại đang tìm kiếm thông tin gì?".
+    \item \textbf{Key ($K$)}: Vector đại diện cho câu trả lời "Token này chứa đựng thông tin gì để các token khác tham chiếu?".
+    \item \textbf{Value ($V$)}: Vector chứa nội dung thông tin thực tế của token khi được trích xuất.
+\end{itemize}
+
+Toán tử Tự chú ý tích chấm thang đo (Scaled Dot-Product Attention) được thực hiện theo công thức: $$\text{Attention}(Q, K, V) = \text{softmax}\left(\frac{Q \cdot K^T}{\sqrt{d_k}}\right) \cdot V$$
+
+Giải thích quy trình tính toán tuyến tính:
+\begin{itemize}
+    \item \textbf{Tính toán độ tương đồng ($Q \cdot K^T$):} Phép nhân ma trận này thực hiện tích vô hướng giữa mọi vector Query và Key của toàn bộ các token. Kết quả thu được là một ma trận vuông kích thước $(N+1) \times (N+1)$ gọi là Bản đồ chú ý (Attention Map), thể hiện mức độ liên quan hình học và ngữ nghĩa giữa các mảnh ảnh với nhau.
+    \item \textbf{Chuẩn hóa thang đo ($\frac{1}{\sqrt{d_k}}$):} Với $d_k$ là số chiều của vector Key. Khi $d_k$ nhận giá trị lớn, tích chấm $Q \cdot K^T$ sẽ tạo ra các giá trị cực lớn, đẩy hàm $\text{softmax}$ vào những vùng có đạo hàm gần bằng 0 (hiện tượng triệt tiêu gradient). Hệ số co giãn $\sqrt{d_k}$ đóng vai trò kéo phân phối dữ liệu về vùng có độ dốc gradient ổn định.
+    \item \textbf{Toán tử $\text{softmax}$:} Chuyển đổi ma trận tương đồng thành một ma trận phân phối xác suất trên từng hàng (tổng giá trị của mỗi hàng bằng 1). Mỗi ô số trong ma trận lúc này đại diện cho "tỷ lệ phần trăm sự chú ý" mà một mảnh ảnh dành cho mảnh ảnh khác.
+    \item \textbf{Lọc thông tin bằng ma trận Value ($\cdot V$):} Phép nhân cuối cùng lấy ma trận trọng số xác suất nhân với nội dung thực tế $V$. Những thông tin ở các vùng được chú ý nhiều sẽ được khuếch đại, ngược lại những vùng không liên quan sẽ bị lọc bỏ hoặc làm mờ đi.
+\end{itemize}
+\subsubsection{Cơ chế Đa đầu (Multi-Head) và ý nghĩa trong Thị giác máy tính}
+Nếu chỉ sử dụng một đầu chú ý duy nhất, mô hình chỉ có thể học được một cách thiết lập quan hệ ngữ cảnh duy nhất trên toàn bộ bức ảnh (ví dụ: chỉ tập trung vào sự tương đồng màu sắc). Điều này làm hạn chế khả năng biểu diễn các cấu trúc phức tạp.
+
+Cơ chế \textbf{Multi-Head Attention} giải quyết bài toán này bằng cách chia số chiều $D$ thành $h$ phần độc lập (với $d_k = d_v = D/h$). Hệ thống sẽ khởi tạo $h$ tập ma trận trọng số $(W_Q^i, W_K^i, W_V^i)$ hoàn toàn khác nhau tương ứng với $h$ đầu chú ý chạy song song.$$\text{head}_i = \text{Attention}(Z W_Q^i, \, Z W_K^i, \, Z W_V^i)$$
+
+Sau khi mỗi đầu chú ý tính toán xong không gian ngữ cảnh riêng của mình, các ma trận đầu ra $\text{head}_i$ sẽ được ghép nối lại với nhau (Concatenation) theo hàng ngang để khôi phục lại kích thước số chiều ban đầu. Cuối cùng, một ma trận chiếu tuyến tính đầu ra $W^O \in \mathbb{R}^{D \times D}$ được áp dụng để tổng hợp tri thức chéo giữa tất cả các đầu:$$\text{MHSA}(Z) = \text{Concat}(\text{head}_1, \text{head}_2, \dots, \text{head}_h) \cdot W^O$$
+
+\textbf{Ý nghĩa cốt lõi đối với mô hình DINOv2:}
+
+Trong các kiến trúc lớn như DINOv2, số lượng đầu chú ý $h$ có thể lên tới 12 (đối với ViT-B) hoặc 16 (đối với ViT-L). Sự phân tách đa đầu này mang lại năng lực trích xuất đặc trưng vượt trội:
+\begin{itemize}
+    \item \textbf{Đầu 1} có thể học cách chú ý vào biên và đường nét của vật thể (rất tốt cho Edge Detection).
+    \item \textbf{Đầu 2} tập trung vào mối quan hệ giữa vật thể chính và nền (Foreground/Background - tiền đề cho tác vụ Segmentation).
+    \item \textbf{Đầu 3} học cách ước lượng sự thay đổi của cấu trúc bề mặt hoặc phối cảnh không gian (tiền đề cho Monocular Depth Estimation).
+\end{itemize}
+
+Chính sự phân rã thông minh của cơ chế MHSA giúp cho vector đại diện của token [CLS] và các patch token cuối cùng chứa đựng một lượng thông tin ngữ cảnh vạn năng và cực kỳ giàu tính ngữ nghĩa.
+\subsection{Khối Transformer Encoder hoàn chỉnh}
+Một mạng Vision Transformer (ViT) tiêu chuẩn không cấu thành từ một tầng đơn lẻ, mà là một chuỗi bao gồm $L$ khối Transformer Encoder giống nhau được xếp chồng liên tiếp lên nhau (với $L = 12$ ở cấu hình ViT-Base và $L = 24$ ở cấu hình ViT-Large). Mỗi khối Transformer Encoder là một hệ thống xử lý hoàn chỉnh, kết hợp hài hòa giữa việc tính toán ngữ cảnh không gian diện rộng và biến đổi đặc trưng phi tuyến tính độc lập.
+\subsubsection{Sơ đồ cấu trúc nội tại của một khối Encoder}
+Mỗi khối Transformer Encoder được xây dựng dựa trên hai khối kiến trúc chính nối tiếp:
+\begin{itemize}
+    \item \textbf{Nhánh Tự chú ý (Attention Branch):} Chịu trách nhiệm cho các token "giao tiếp" và trao đổi thông tin ngữ cảnh không gian với nhau thông qua cơ chế Tự chú ý đa đầu (MHSA).
+    \item \textbf{Nhánh Truyền thẳng (Feed-Forward / MLP Branch):} Chịu trách nhiệm mã hóa và biến đổi phi tuyến tính các đặc trưng nội tại của từng token một cách độc lập thông qua mạng nơ-ron đa tầng (MLP).
+\end{itemize}
+
+Cả hai nhánh này đều được bảo vệ và tối ưu hóa bởi cấu trúc Tiền chuẩn hóa (Pre-Layer Normalization) kết hợp với Kết nối tắt (Residual Connections).
+
+\subsubsection{Chu trình vận động và Biến đổi của dòng dữ liệu}
+Để làm rõ bản chất kỹ thuật của khối Encoder, ta hãy theo dõi toán tử biến đổi ma trận dữ liệu từ trạng thái đầu vào $Z_{l-1}$ đến trạng thái đầu ra $Z_l$ của tầng thứ $l$:
+
+\begin{itemize}
+    \item \textbf{Bước 1. Tính toán tại Nhánh Tự chú ý (MHSA):} Ma trận đặc trưng từ tầng trước $Z_{l-1} \in \mathbb{R}^{(N+1) \times D}$ trước tiên được đưa qua tầng chuẩn hóa lớp (Layer Norm). Phép toán này giữ cho phân phối dữ liệu ổn định. Sau đó, dữ liệu tiến vào khối MHSA để các token tương tác chéo. Đầu ra của MHSA được cộng trực tiếp với ma trận gốc $Z_{l-1}$ thông qua kết nối tắt (Skip connection) để tạo ra trạng thái trung gian $Z'_l$: $$Z'_l = \text{MHSA}(\text{LN}(Z_{l-1})) + Z_{l-1}$$
+    \textit{Ý nghĩa:} Tại cuối bước này, ma trận đặc trưng $Z'_l$ đã được cập nhật thêm thông tin ngữ cảnh không gian (ví dụ: một patch chứa "bánh xe" đã nhận biết được sự tồn tại của các patch chứa "thân xe" xung quanh nó).
+    \item \textbf{Bước 2. Tính toán tại Nhánh Truyền thẳng (MLP):} Trạng thái trung gian $Z'_l$ tiếp tục được chuẩn hóa qua tầng Layer Norm thứ hai trước khi đi vào mạng MLP. Sau khi cấu trúc MLP biến đổi không gian phi tuyến tính của các kênh tính năng, một kết nối tắt thứ hai được thiết lập bằng cách cộng $Z'_l$ với đầu ra của MLP để thu được ma trận đặc trưng cuối cùng $Z_l$ của khối Encoder đó:$$Z_l = \text{MLP}(\text{LN}(Z'_l)) + Z'_l$$
+    \textit{Ý nghĩa:} Bước này giúp mô hình tinh lọc lại các tri thức không gian vừa học được ở Bước 1, biến đổi chúng thành các đặc trưng trừu tượng hơn ở cấp độ ngữ nghĩa.
+\end{itemize}
+
+\subsubsection{Vai trò của cấu trúc Pre-LN và Residual Connections trong các mạng cực sâu}
+Sự kết hợp giữa Pre-LN và Residual Connections là yếu tố quyết định giúp kiến trúc Transformer có thể huấn luyện thành công ở quy mô lớn (như cấu hình ViT-G của DINOv2 với hơn 1 tỷ tham số).
+\begin{itemize}
+    \item \textbf{Cơ chế Pre-LN giải quyết lỗi bùng nổ Gradient:} Trong các kiến trúc mạng Transformer đời đầu (như Vaswani và các cộng sự), tầng Layer Norm được đặt sau phép cộng residual (Post-LN). Điều này khiến phương sai của các dòng đặc trưng tăng tiến theo độ sâu của mạng, dẫn đến mất ổn định khi train. Việc đưa Layer Norm lên phía trước (Pre-LN) giới hạn biên độ dữ liệu đầu vào của các tầng MHSA và MLP luôn nằm trong một khoảng phân phối chuẩn ổn định.
+    \item \textbf{Residual Connections tạo đường truyền Gradient không suy giảm:} Khi thực hiện đạo hàm theo quy tắc chuỗi (Chain rule) trong quá trình lan truyền ngược (Backpropagation), sự xuất hiện của toán tử cộng ($+$) trong kết nối tắt đảm bảo rằng gradient sai số từ tầng cuối cùng ($L$) có thể truyền thẳng một mạch về tầng đầu tiên ($0$) mà không bị triệt tiêu qua chuỗi các phép nhân ma trận trọng số phức tạp.
+\end{itemize}
+
+\subsubsection{Trạng thái đầu ra của Khối Encoder cuối cùng ($Z_L$)}
+Sau khi dòng dữ liệu đi qua toàn bộ $L$ khối Encoder xếp chồng, ta thu được ma trận đặc trưng cuối cùng $Z_L \in \mathbb{R}^{(N+1) \times D}$.
+\begin{itemize}
+    \item \textbf{Vector đầu ra của token} [CLS] ($z_L^0 \in \mathbb{R}^D$): Đại diện cho phân phối xác suất ngữ nghĩa và ngữ cảnh của toàn bộ bức ảnh (Global Image Feature). Thường được trích xuất cho các bài toán cấp độ ảnh như Phân loại ảnh (Image Classification) hay Tìm kiếm ảnh (Image Retrieval).
+    \item \textbf{Chuỗi các vector Patch tokens ($z_L^1, z_L^2, \dots, z_L^N \in \mathbb{R}^D$):} Đại diện cho các đặc trưng chi tiết tại từng tọa độ không gian nhỏ kích thước $P \times P$ trên ảnh gốc (Local Patch Features). Đây chính là nguồn tài nguyên "vô giá" để DINOv2 cung cấp cho các bộ giải mã (Decoders) của bài toán dự đoán mật độ cao như Phân đoạn ngữ nghĩa (Semantic Segmentation) hay Ước lượng chiều sâu (Depth Estimation).
+\end{itemize}
+
+
+
+\section{Sự tiến hóa từ DINO (v1) và iBOT lên DINOv2}
+DINOv2 không xuất hiện như một kiến trúc hoàn toàn tách rời, mà là kết quả của quá trình kế thừa và mở rộng từ hai hướng tự giám sát quan trọng trước đó: DINO và iBOT. Điểm chung của các phương pháp này là chúng không cần nhãn lớp thủ công, mà buộc mô hình học ra biểu diễn ổn định từ chính ảnh đầu vào thông qua các phép biến đổi, che khuất và so khớp đặc trưng.
+
+\subsection{DINO v1: tự chưng cất ở mức ảnh}
+DINO v1 sử dụng cơ chế \textit{self-distillation without labels}, trong đó có hai mạng cùng kiến trúc: \textit{student} và \textit{teacher}. Cùng một ảnh được tạo thành nhiều phiên bản khác nhau bằng các phép tăng cường dữ liệu như crop, đổi màu, làm mờ hoặc thay đổi tỉ lệ. Mạng student phải dự đoán phân phối đầu ra của mạng teacher trên các phiên bản ảnh khác nhau đó.
+
+Trong Vision Transformer, DINO chủ yếu khai thác token \texttt{[CLS]} để biểu diễn toàn bộ ảnh. Vì vậy, DINO học rất tốt đặc trưng ngữ nghĩa ở mức ảnh: hai ảnh cùng chứa một đối tượng hoặc có cấu trúc thị giác tương tự thường nằm gần nhau trong không gian embedding. Đây là lý do DINO v1 phù hợp với các bài toán như phân loại ảnh, tìm ảnh tương tự hoặc gom cụm ảnh. Tuy nhiên, do mục tiêu học tập trung nhiều vào biểu diễn toàn cục, khả năng khai thác chi tiết ở từng vùng nhỏ của ảnh vẫn còn hạn chế nếu dùng trực tiếp cho các bài toán cần thông tin cục bộ như phân đoạn, phát hiện vùng lỗi hoặc so khớp từng bộ phận.
+
+\subsection{iBOT: bổ sung học biểu diễn ở mức patch}
+iBOT mở rộng hướng tiếp cận của DINO bằng cách đưa thêm mục tiêu học ở mức patch. Thay vì chỉ so khớp đặc trưng toàn ảnh thông qua token \texttt{[CLS]}, iBOT che một phần các patch đầu vào của student và yêu cầu student khôi phục biểu diễn của các patch bị che dựa trên tín hiệu từ teacher. Cách làm này gần với tư tưởng \textit{masked image modeling}, nhưng thay vì tái tạo pixel thô, mô hình dự đoán biểu diễn đặc trưng trong không gian học được.
+
+Điểm mạnh của iBOT là mô hình không chỉ biết ``ảnh này giống ảnh nào'', mà còn học được ``vùng nào trong ảnh tương ứng với vùng nào''. Điều này giúp biểu diễn patch giàu thông tin hơn, hữu ích cho các tác vụ mật độ cao như semantic segmentation, depth estimation, object localization và phát hiện bất thường theo vùng. Với các bài toán kiểm tra lỗi sản phẩm, đặc trưng patch đặc biệt quan trọng vì lỗi thường chỉ xuất hiện ở một vùng nhỏ, ví dụ vết nứt trên gạch, vết xước trên da, hoặc vùng bẩn trong chai.
+
+\subsection{DINOv2: kết hợp mục tiêu toàn cục và cục bộ ở quy mô lớn}
+DINOv2 kế thừa cả hai ý tưởng trên. Mô hình vẫn giữ cơ chế student--teacher và mục tiêu DINO ở mức ảnh, đồng thời kết hợp thêm mục tiêu iBOT ở mức patch. Có thể hiểu đơn giản rằng DINOv2 học đồng thời hai loại tri thức:
+
+\begin{itemize}
+    \item \textbf{Tri thức toàn cục:} ảnh thuộc kiểu đối tượng nào, có ngữ cảnh và hình dạng tổng thể ra sao. Phần này hỗ trợ tìm kiếm ảnh tương tự, phát hiện ảnh trùng gần giống và phân cụm ảnh.
+    \item \textbf{Tri thức cục bộ:} từng patch trong ảnh đại diện cho bề mặt, cạnh, bộ phận hoặc cấu trúc nào. Phần này hỗ trợ các bài toán cần bản đồ không gian như phát hiện lỗi, heatmap bất thường và so khớp vùng ảnh.
+\end{itemize}
+
+Ngoài việc kết hợp hai mục tiêu học, DINOv2 còn khác các thế hệ trước ở quy mô dữ liệu, quy mô mô hình và công thức huấn luyện. Thay vì chỉ dựa vào một tập dữ liệu nhỏ như ImageNet-1k hoặc tập dữ liệu lớn nhưng chưa được lọc kỹ, DINOv2 xây dựng tập LVD-142M gồm 142 triệu ảnh đã được chọn lọc. Quá trình này giúp mô hình học từ dữ liệu đa dạng nhưng vẫn hạn chế nhiễu, trùng lặp và mất cân bằng khái niệm.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/2.6.png}
+    \caption{Sự cải thiện hiệu năng của DINOv2 khi mở rộng quy mô mô hình trên nhiều tác vụ thị giác.}
+\end{figure}
+
+Nhờ các thay đổi trên, DINOv2 trở thành một bộ trích xuất đặc trưng tổng quát hơn DINO v1 và iBOT riêng lẻ. Trong phạm vi đồ án này, đặc trưng toàn cục của DINOv2 được dùng cho tìm kiếm ảnh tương tự, còn đặc trưng patch được dùng để ước lượng mức độ bất thường và tạo heatmap vùng lỗi.
+
+\section{Mô hình Nền tảng DINOv2}
+\subsection{Khái niệm mô hình nền tảng trong thị giác máy tính}
+Mô hình nền tảng là mô hình được tiền huấn luyện trên lượng dữ liệu lớn và có thể tái sử dụng cho nhiều tác vụ khác nhau mà không cần huấn luyện lại toàn bộ từ đầu. Trong xử lý ngôn ngữ tự nhiên, các mô hình nền tảng thường học từ văn bản quy mô lớn. Với thị giác máy tính, DINOv2 theo đuổi hướng tương tự: học một bộ đặc trưng hình ảnh tổng quát từ ảnh không nhãn, sau đó dùng bộ đặc trưng đó cho nhiều bài toán downstream.
+
+Điểm quan trọng của DINOv2 là mô hình không sinh nhãn, không sinh mô tả văn bản và cũng không trực tiếp đưa ra quyết định cuối cùng cho mọi bài toán. Thay vào đó, DINOv2 đóng vai trò như một \textbf{bộ trích xuất đặc trưng}. Ảnh đầu vào được biến đổi thành các vector embedding giàu ngữ nghĩa. Các hệ thống phía sau có thể dùng embedding này cho phân loại, tìm kiếm, phân cụm, phân đoạn, ước lượng chiều sâu hoặc phát hiện bất thường.
+
+\subsection{Quy mô dữ liệu và vai trò của dữ liệu chọn lọc}
+Một đóng góp quan trọng của DINOv2 là cách xây dựng dữ liệu huấn luyện. Như pipeline dữ liệu đã trình bày ở phần giới thiệu, paper không chỉ lấy ngẫu nhiên ảnh từ nguồn lớn, mà bắt đầu từ các tập dữ liệu curated, sau đó dùng truy hồi ảnh để mở rộng sang nguồn ảnh chưa lọc. Các ảnh từ nguồn chưa lọc được ánh xạ sang embedding, loại bỏ trùng lặp, rồi chọn những ảnh gần với ảnh trong tập curated. Kết quả là tập dữ liệu LVD-142M vừa lớn, vừa có độ đa dạng và chất lượng tốt hơn so với việc lấy trực tiếp dữ liệu thô.
+
+Yếu tố dữ liệu có ý nghĩa trực tiếp với chất lượng mô hình nền tảng. Nếu dữ liệu quá ít, mô hình dễ học các mẫu hẹp và khó tổng quát sang miền mới. Nếu dữ liệu quá lớn nhưng không được lọc, mô hình có thể bị nhiễu bởi ảnh trùng lặp, ảnh chất lượng thấp hoặc phân bố dữ liệu lệch. DINOv2 giải quyết vấn đề này bằng cách kết hợp quy mô lớn với bước lọc và cân bằng dựa trên độ tương tự thị giác. Vì Figure 3 của paper đã được dùng làm hình tổng quan pipeline ở Chương 1, phần này không lặp lại hình đó mà tập trung giải thích vai trò của dữ liệu đối với mô hình nền tảng.
+
+\subsection{Kiến trúc và đầu ra đặc trưng}
+DINOv2 sử dụng họ kiến trúc Vision Transformer với nhiều kích thước khác nhau như ViT-S/14, ViT-B/14, ViT-L/14 và ViT-g/14. Ký hiệu ``/14'' cho biết kích thước patch là $14 \times 14$ pixel. Ảnh đầu vào được chia thành các patch, mỗi patch được biến đổi thành một token, sau đó toàn bộ chuỗi token đi qua các khối Transformer Encoder.
+
+Đầu ra của DINOv2 có thể được nhìn ở hai mức:
+
+\begin{itemize}
+    \item \textbf{Global embedding:} thường lấy từ token \texttt{[CLS]} hoặc đặc trưng tổng hợp toàn ảnh. Vector này phù hợp với tìm kiếm ảnh tương tự, phát hiện ảnh trùng gần giống và phân cụm.
+    \item \textbf{Patch embeddings:} là tập vector tương ứng với các patch không gian trên ảnh. Các vector này phù hợp với các tác vụ cần định vị vùng như phát hiện bất thường, tạo heatmap lỗi hoặc so khớp bộ phận giữa các ảnh.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.85\textwidth]{img/2.8.png}
+    \caption{Trực quan hóa các thành phần PCA đầu tiên của patch embeddings trong DINOv2.}
+\end{figure}
+
+Hình trực quan PCA cho thấy các patch thuộc cùng một bộ phận hoặc vùng ngữ nghĩa có xu hướng được ánh xạ về màu tương tự, ngay cả khi ảnh thay đổi tư thế, phong cách hoặc loại đối tượng. Đây là bằng chứng trực quan cho thấy DINOv2 không chỉ học đặc trưng toàn ảnh, mà còn học được cấu trúc không gian bên trong ảnh.
+
+\subsection{Vai trò của DINOv2 trong hệ thống demo}
+Trong demo của đồ án, phiên bản được sử dụng là \textbf{DINOv2 ViT-S/14} (\texttt{dinov2\_vits14}). Đây là bản nhỏ nhất trong họ DINOv2, có ưu điểm là nhẹ, tốc độ suy luận nhanh hơn và phù hợp để chạy demo backend--frontend trên máy cá nhân. Dù nhỏ hơn ViT-B, ViT-L hoặc ViT-g, ViT-S/14 vẫn giữ được đặc trưng tự giám sát mạnh và đủ tốt để minh họa các chức năng chính.
+
+Luồng xử lý trong demo có thể tóm tắt như sau:
+
+\begin{itemize}
+    \item \textbf{Tìm kiếm ảnh tương tự:} ảnh truy vấn được đưa qua DINOv2 để lấy global embedding, sau đó so sánh cosine similarity với embedding của các ảnh trong thư viện.
+    \item \textbf{Phát hiện ảnh trùng gần giống:} nếu độ tương tự giữa ảnh truy vấn và ảnh trong thư viện vượt ngưỡng, hệ thống coi đây là trường hợp gần trùng hoặc rất giống.
+    \item \textbf{Phát hiện bất thường:} ảnh truy vấn được so sánh với tập ảnh normal. Nếu các patch của ảnh truy vấn khác xa patch normal gần nhất, hệ thống tăng anomaly score và tạo heatmap để chỉ ra vùng nghi ngờ lỗi.
+    \item \textbf{Dự đoán loại lỗi gần đúng:} hệ thống dùng các ảnh lỗi gần nhất trong không gian embedding để gợi ý loại lỗi có khả năng xảy ra, ví dụ crack, contamination, scratch hoặc cut.
+\end{itemize}
+
+Cần lưu ý rằng DINOv2 trong demo là mô hình pretrained và không được fine-tune riêng cho từng loại sản phẩm. Vì vậy, các kết quả như verdict, anomaly score hay likely defect chỉ nên hiểu là tín hiệu hỗ trợ phân tích, không phải kết luận tuyệt đối. Muốn dùng trong môi trường kiểm định sản phẩm thực tế, hệ thống cần thêm dữ liệu chuẩn, hiệu chỉnh ngưỡng theo từng loại sản phẩm và đánh giá bằng tập test độc lập.

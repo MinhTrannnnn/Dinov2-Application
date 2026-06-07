@@ -1,0 +1,347 @@
+\chapter{CÀI ĐẶT THỬ NGHIỆM VÀ ỨNG DỤNG DINOv2 VÀO CÁC TÁC VỤ}
+
+\section{Cài đặt thử nghiệm}
+\subsection{Mục tiêu của chương}
+Sau khi đã trình bày cơ sở lý thuyết về Self-Supervised Learning, Vision Transformer và DINOv2 ở chương trước, chương này tập trung vào phần cài đặt thực nghiệm. Mục tiêu chính không phải là huấn luyện lại DINOv2 từ đầu, vì việc đó đòi hỏi tập dữ liệu và tài nguyên tính toán rất lớn. Thay vào đó, đồ án sử dụng mô hình DINOv2 đã được tiền huấn luyện sẵn như một bộ trích xuất đặc trưng hình ảnh, sau đó xây dựng các chức năng ứng dụng phía trên các đặc trưng này.
+
+Hệ thống demo được thiết kế theo hướng backend--frontend thay vì dùng Streamlit. Backend chịu trách nhiệm nạp mô hình DINOv2, trích xuất embedding, xây dựng chỉ mục, tính độ tương tự và phát hiện bất thường. Frontend cung cấp giao diện trực quan để chọn danh mục sản phẩm, xây dựng index, tải ảnh truy vấn lên và quan sát kết quả dưới nhiều góc nhìn khác nhau.
+
+Các tác vụ được triển khai trong chương này gồm:
+
+\begin{itemize}
+    \item Tìm kiếm ảnh tương tự dựa trên global embedding của DINOv2.
+    \item Phát hiện ảnh trùng hoặc gần giống dựa trên ngưỡng cosine similarity.
+    \item Phát hiện bất thường trên ảnh sản phẩm dựa trên patch embeddings.
+    \item Tạo heatmap để trực quan hóa vùng nghi ngờ lỗi.
+    \item Gợi ý loại lỗi gần đúng dựa trên các ảnh lỗi gần nhất trong thư viện.
+    \item Trực quan hóa không gian đặc trưng bằng bản đồ PCA hai chiều.
+\end{itemize}
+
+\subsection{Môi trường và công nghệ sử dụng}
+Hệ thống được xây dựng thành hai phần độc lập: backend và frontend. Backend được viết bằng Python, sử dụng FastAPI để cung cấp REST API. Mô hình DINOv2 được nạp thông qua PyTorch Hub với tên mô hình \texttt{dinov2\_vits14}. Frontend được xây dựng bằng React và Vite, có nhiệm vụ gọi API backend và hiển thị kết quả phân tích theo từng trang chức năng.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|p{7cm}|}
+        \hline
+        \textbf{Thành phần} & \textbf{Công nghệ} & \textbf{Vai trò} \\
+        \hline
+        Backend API & FastAPI & Xây dựng các endpoint xử lý ảnh, build index, phân tích ảnh truy vấn và trả kết quả cho frontend. \\
+        \hline
+        Mô hình học sâu & PyTorch, TorchVision & Nạp mô hình DINOv2 pretrained và thực hiện suy luận trên ảnh đầu vào. \\
+        \hline
+        Xử lý ảnh & PIL, NumPy & Đọc ảnh, resize, chuẩn hóa, tính toán embedding, heatmap và overlay ảnh. \\
+        \hline
+        Frontend & React, Vite & Xây dựng giao diện người dùng gồm các trang Index, Inspect, Retrieval, Anomaly và Map. \\
+        \hline
+        Lưu trữ index & NumPy NPZ, JSON & Lưu embedding, patch bank và metadata của ảnh để tái sử dụng giữa các lần chạy. \\
+        \hline
+    \end{tabular}
+    \caption{Các công nghệ chính được sử dụng trong hệ thống demo}
+\end{table}
+
+Phiên bản DINOv2 được chọn là \texttt{dinov2\_vits14}. Đây là biến thể ViT-Small với patch size $14 \times 14$. So với các bản lớn hơn như ViT-B/14, ViT-L/14 hoặc ViT-g/14, bản ViT-S/14 có tốc độ suy luận nhanh hơn, dung lượng nhỏ hơn và phù hợp hơn với mục tiêu demo trên máy cá nhân. Mỗi ảnh đầu vào sau tiền xử lý được đưa về kích thước $224 \times 224$, tương ứng với lưới patch $16 \times 16$, tức 256 patch tokens. Chiều embedding của DINOv2 ViT-S/14 là 384.
+
+\subsection{Tổ chức dữ liệu thử nghiệm}
+Dữ liệu demo được tổ chức thành hai nhóm chính: \texttt{gallery} và \texttt{normal}. Nhóm \texttt{gallery} là thư viện ảnh dùng cho tìm kiếm ảnh tương tự và gợi ý loại lỗi. Nhóm này có thể chứa cả ảnh bình thường và ảnh lỗi. Nhóm \texttt{normal} chỉ chứa ảnh bình thường, được dùng làm tập tham chiếu khi phát hiện bất thường.
+
+Cấu trúc dữ liệu được tổ chức theo thư mục như sau:
+
+\begin{verbatim}
+data/
+  gallery/
+    bottle_good/
+    bottle_broken_large/
+    bottle_broken_small/
+    bottle_contamination/
+    tile_good/
+    tile_crack/
+    ...
+  normal/
+    bottle_good/
+    tile_good/
+    leather_good/
+    wood_good/
+  index/
+    bottle/
+    tile/
+    leather/
+    wood/
+\end{verbatim}
+
+Tên thư mục được đặt theo quy tắc \texttt{category\_defect}, ví dụ \texttt{tile\_crack} nghĩa là ảnh thuộc danh mục gạch và loại lỗi là nứt. Cách đặt tên này giúp hệ thống tự động suy ra danh mục sản phẩm và nhãn lỗi mà không cần file annotation riêng.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|c|c|l|}
+        \hline
+        \textbf{Danh mục} & \textbf{Ảnh gallery} & \textbf{Ảnh normal} & \textbf{Một số loại lỗi} \\
+        \hline
+        Bottle & 83 & 20 & broken large, broken small, contamination \\
+        \hline
+        Tile & 117 & 33 & crack, glue strip, gray stroke, oil, rough \\
+        \hline
+        Leather & 124 & 32 & color, cut, fold, glue, poke \\
+        \hline
+        Wood & 79 & 19 & color, combined, hole, liquid, scratch \\
+        \hline
+        Tổng & 403 & 104 & Nhiều loại lỗi bề mặt khác nhau \\
+        \hline
+    \end{tabular}
+    \caption{Số lượng dữ liệu thử nghiệm được sử dụng trong demo}
+\end{table}
+
+Điểm quan trọng là hai nhóm dữ liệu có vai trò khác nhau. Với bài toán tìm ảnh tương tự, hệ thống cần một thư viện ảnh đa dạng nên dùng toàn bộ \texttt{gallery}. Với bài toán bất thường, hệ thống cần biết thế nào là trạng thái bình thường nên chỉ dùng \texttt{normal} để tạo patch bank. Nếu đưa ảnh lỗi vào tập normal, mô hình có thể xem lỗi là bình thường và làm giảm khả năng phát hiện bất thường.
+
+\subsection{Kiến trúc tổng thể của hệ thống}
+Hệ thống được triển khai theo mô hình client--server. Người dùng thao tác trên frontend, frontend gửi request tới backend, backend xử lý ảnh bằng DINOv2 và trả về kết quả ở dạng JSON. Kết quả sau đó được frontend hiển thị dưới dạng các thẻ chỉ số, danh sách ảnh tương tự, heatmap và feature map.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{img/3.1.png}
+    \caption{Giao diện trang Index dùng để chọn danh mục dữ liệu, kiểm tra trạng thái index và quan sát feature map tổng quan}
+\end{figure}
+
+Luồng hoạt động tổng quát gồm bốn bước:
+
+\begin{enumerate}
+    \item Người dùng chọn danh mục sản phẩm, ví dụ \texttt{tile}, \texttt{bottle}, \texttt{leather} hoặc \texttt{wood}.
+    \item Backend đọc ảnh trong \texttt{data/gallery} và \texttt{data/normal}, sau đó dùng DINOv2 để trích xuất embedding.
+    \item Hệ thống lưu global embeddings, patch embeddings và metadata thành index trên đĩa.
+    \item Khi người dùng tải ảnh truy vấn lên, backend so sánh ảnh đó với index đã lưu và trả kết quả phân tích cho frontend.
+\end{enumerate}
+
+Cách chia này giúp hệ thống không phải trích xuất lại đặc trưng cho toàn bộ dữ liệu mỗi khi phân tích một ảnh mới. Việc build index có thể tốn thời gian ở lần đầu, nhưng sau khi index đã được lưu, các lần phân tích tiếp theo chỉ cần trích xuất đặc trưng cho ảnh truy vấn.
+
+\subsection{Tiền xử lý ảnh và trích xuất đặc trưng DINOv2}
+Ảnh đầu vào trước khi đưa vào DINOv2 được chuẩn hóa theo cùng kiểu tiền xử lý thường dùng cho các mô hình thị giác pretrained. Cụ thể, ảnh được chuyển sang RGB, resize về cạnh ngắn 256, crop trung tâm về $224 \times 224$, chuyển sang tensor và chuẩn hóa theo mean/std của ImageNet.
+
+Với mỗi ảnh, DINOv2 trả về hai nhóm đặc trưng chính:
+
+\begin{itemize}
+    \item \textbf{Global embedding:} vector 384 chiều lấy từ class token. Vector này biểu diễn toàn bộ nội dung ảnh và được dùng cho tìm kiếm ảnh tương tự.
+    \item \textbf{Patch embeddings:} ma trận gồm 256 vector, mỗi vector 384 chiều, tương ứng với lưới $16 \times 16$ patch trên ảnh. Các vector này được dùng cho phát hiện bất thường theo vùng.
+\end{itemize}
+
+Các vector embedding được chuẩn hóa L2 trước khi sử dụng. Khi đó, độ tương tự cosine giữa hai vector có thể tính đơn giản bằng tích vô hướng:
+
+\[
+\text{sim}(q, x) = q^T x
+\]
+
+Trong đó $q$ là embedding của ảnh truy vấn và $x$ là embedding của một ảnh trong thư viện. Giá trị càng gần 1 nghĩa là hai ảnh càng giống nhau trong không gian đặc trưng của DINOv2.
+
+\subsection{Xây dựng image index}
+Chức năng build index là bước chuẩn bị quan trọng trước khi chạy các tác vụ phân tích. Với mỗi danh mục được chọn, backend thực hiện các công việc sau:
+
+\begin{enumerate}
+    \item Duyệt toàn bộ ảnh gallery thuộc danh mục đang chọn.
+    \item Trích xuất global embedding của từng ảnh gallery và lưu thành ma trận \texttt{gallery\_embeddings}.
+    \item Duyệt toàn bộ ảnh normal thuộc cùng danh mục.
+    \item Trích xuất global embedding và patch embeddings của các ảnh normal.
+    \item Ghép patch embeddings của ảnh normal thành một patch bank.
+    \item Lưu embedding và metadata xuống thư mục \texttt{data/index/<category>}.
+\end{enumerate}
+
+Patch bank là tập các đặc trưng cục bộ đại diện cho bề mặt bình thường. Ví dụ, với ảnh đầu vào $224 \times 224$ và patch size 14, mỗi ảnh normal tạo ra 256 patch embeddings. Nếu một danh mục có 33 ảnh normal, số patch ban đầu có thể lên tới $33 \times 256 = 8448$ patch. Để tránh bộ nhớ tăng quá lớn khi dữ liệu nhiều, hệ thống đặt giới hạn tối đa cho patch bank là 50.000 patch.
+
+Kết quả index được lưu thành hai file:
+
+\begin{itemize}
+    \item \texttt{features.npz}: chứa \texttt{gallery\_embeddings}, \texttt{normal\_embeddings} và \texttt{patch\_bank}.
+    \item \texttt{metadata.json}: chứa tên ảnh, nhãn, đường dẫn tương đối và danh mục đang được index.
+\end{itemize}
+
+Nhờ lưu index trên đĩa, backend có thể nạp lại index khi khởi động mà không cần build lại từ đầu, miễn là dữ liệu gốc không thay đổi.
+
+\subsection{Thiết kế API backend}
+Backend cung cấp các API chính để frontend điều khiển toàn bộ quy trình. Các API được thiết kế đơn giản, trả dữ liệu JSON để frontend dễ hiển thị.
+
+\begin{table}[H]
+    \centering
+    \begin{tabular}{|l|l|p{8cm}|}
+        \hline
+        \textbf{Endpoint} & \textbf{Phương thức} & \textbf{Chức năng} \\
+        \hline
+        \texttt{/api/health} & GET & Kiểm tra trạng thái backend, thiết bị đang dùng và mô hình DINOv2 đã được nạp hay chưa. \\
+        \hline
+        \texttt{/api/index/status} & GET & Trả về số ảnh nguồn, số ảnh đã index, kích thước patch bank và trạng thái sẵn sàng của từng danh mục. \\
+        \hline
+        \texttt{/api/index/build} & POST & Xây dựng index cho danh mục được chọn. \\
+        \hline
+        \texttt{/api/index/map} & GET & Trả về tọa độ PCA hai chiều của các ảnh trong gallery để vẽ feature map. \\
+        \hline
+        \texttt{/api/analyze} & POST & Nhận ảnh truy vấn, trích xuất đặc trưng, tìm ảnh tương tự, tính anomaly score, tạo heatmap và trả kết quả phân tích. \\
+        \hline
+        \texttt{/api/images} & GET & Trả ảnh từ thư mục dữ liệu để frontend hiển thị kết quả. \\
+        \hline
+    \end{tabular}
+    \caption{Các API chính của backend}
+\end{table}
+
+Trong đó, endpoint \texttt{/api/analyze} là endpoint quan trọng nhất. Nó nhận ảnh truy vấn cùng các tham số như \texttt{top\_k}, \texttt{duplicate\_threshold} và \texttt{anomaly\_threshold}. Kết quả trả về bao gồm ảnh truy vấn đã chuẩn hóa, danh sách ảnh tương tự, điểm tương tự cao nhất, điểm bất thường, heatmap, bounding box vùng lỗi, nhãn lỗi dự đoán gần đúng và dữ liệu feature map.
+
+\subsection{Thiết kế giao diện frontend}
+Frontend được chia thành nhiều trang nhỏ để người dùng dễ theo dõi từng chức năng. Thay vì dồn tất cả kết quả vào một màn hình, mỗi trang tập trung vào một nhóm tác vụ riêng.
+
+\begin{itemize}
+    \item \textbf{Index:} chọn danh mục, xem số lượng dữ liệu, build index và xem feature map tổng quan.
+    \item \textbf{Inspect:} tải ảnh truy vấn, điều chỉnh tham số và xem kết quả tổng hợp.
+    \item \textbf{Retrieval:} xem danh sách các ảnh tương tự nhất trong gallery.
+    \item \textbf{Anomaly:} xem heatmap bất thường, bounding box vùng nghi ngờ lỗi và ảnh normal gần nhất.
+    \item \textbf{Map:} quan sát phân bố embedding của các ảnh trong không gian PCA hai chiều.
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{img/3.2.png}
+    \caption{Giao diện trang Inspect sau khi tải ảnh truy vấn và chạy phân tích}
+\end{figure}
+
+Ba tham số người dùng có thể điều chỉnh trực tiếp trên giao diện gồm:
+
+\begin{itemize}
+    \item \textbf{Top matches:} số lượng ảnh tương tự muốn hiển thị. Mặc định là 6.
+    \item \textbf{Duplicate threshold:} ngưỡng để kết luận ảnh truy vấn có gần trùng với ảnh trong gallery hay không. Mặc định là 0.92.
+    \item \textbf{Anomaly threshold:} ngưỡng để đánh dấu ảnh có bất thường hay không. Mặc định là 0.35.
+\end{itemize}
+
+Các tham số này giúp người dùng thử nghiệm độ nhạy của hệ thống. Ví dụ, nếu giảm anomaly threshold, hệ thống sẽ nhạy hơn với lỗi nhỏ nhưng cũng dễ báo lỗi nhầm hơn. Ngược lại, nếu tăng threshold, hệ thống thận trọng hơn nhưng có thể bỏ sót lỗi nhẹ.
+
+\section{Ứng dụng DINOv2 vào một số tác vụ}
+\subsection{Tìm kiếm ảnh tương tự}
+Tác vụ đầu tiên là tìm kiếm ảnh tương tự trong thư viện. Đây là tác vụ phù hợp nhất với global embedding của DINOv2. Ý tưởng chính là nếu hai ảnh có nội dung hoặc cấu trúc thị giác giống nhau, embedding của chúng sẽ nằm gần nhau trong không gian đặc trưng.
+
+Quy trình xử lý như sau:
+
+\begin{enumerate}
+    \item Người dùng tải ảnh truy vấn lên frontend.
+    \item Backend đưa ảnh qua DINOv2 để lấy global embedding $q$.
+    \item Hệ thống tính cosine similarity giữa $q$ và toàn bộ embedding trong \texttt{gallery\_embeddings}.
+    \item Các ảnh được sắp xếp giảm dần theo điểm similarity.
+    \item Frontend hiển thị \texttt{top\_k} ảnh giống nhất cùng phần trăm tương tự.
+\end{enumerate}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{img/3.3.png}
+    \caption{Giao diện trang Retrieval hiển thị các ảnh tương tự nhất với ảnh truy vấn}
+\end{figure}
+
+Trong demo, tìm kiếm ảnh tương tự có hai ý nghĩa. Thứ nhất, nó cho phép kiểm tra DINOv2 có gom đúng các ảnh cùng loại sản phẩm hoặc cùng dạng lỗi hay không. Thứ hai, nó là cơ sở để phát hiện ảnh trùng gần giống và gợi ý loại lỗi.
+
+\subsection{Phát hiện ảnh trùng hoặc gần giống}
+Phát hiện ảnh trùng gần giống là một trường hợp đặc biệt của tìm kiếm ảnh tương tự. Sau khi tìm ảnh gần nhất trong gallery, hệ thống so sánh điểm similarity cao nhất với ngưỡng \texttt{duplicate\_threshold}.
+
+Gọi $s_{\max}$ là điểm similarity cao nhất:
+
+\[
+s_{\max} = \max_i \text{sim}(q, x_i)
+\]
+
+Nếu:
+
+\[
+s_{\max} \geq \tau_{dup}
+\]
+
+thì ảnh truy vấn được xem là ảnh trùng hoặc gần trùng với một ảnh trong thư viện. Trong đó $\tau_{dup}$ là ngưỡng duplicate threshold do người dùng chọn.
+
+Chức năng này hữu ích trong các tình huống như kiểm tra ảnh sản phẩm đã tồn tại trong cơ sở dữ liệu hay chưa, phát hiện ảnh chụp lặp lại, hoặc tìm các mẫu lỗi rất giống nhau trong quá trình kiểm tra chất lượng.
+
+\subsection{Phát hiện bất thường bằng patch embeddings}
+Khác với tìm kiếm ảnh tương tự, phát hiện bất thường không chỉ quan tâm toàn bộ ảnh giống ảnh nào, mà quan tâm từng vùng nhỏ trong ảnh có khác thường hay không. Vì vậy, hệ thống sử dụng patch embeddings thay vì chỉ dùng global embedding.
+
+Ý tưởng chính là xây dựng một patch bank từ các ảnh normal. Patch bank này đóng vai trò như bộ nhớ về các vùng bề mặt bình thường. Khi có ảnh truy vấn, mỗi patch của ảnh truy vấn được so sánh với toàn bộ patch bình thường trong patch bank. Nếu một patch không giống bất kỳ patch normal nào, patch đó có khả năng là vùng bất thường.
+
+Với mỗi patch truy vấn $p_j$, khoảng cách bất thường được tính theo:
+
+\[
+d_j = 1 - \max_k \text{sim}(p_j, b_k)
+\]
+
+Trong đó $b_k$ là patch thứ $k$ trong patch bank. Nếu $d_j$ càng lớn, patch $p_j$ càng khác với các vùng bình thường đã biết.
+
+Sau khi tính khoảng cách cho toàn bộ 256 patch, hệ thống lấy trung bình nhóm 10\% patch có khoảng cách lớn nhất để tạo anomaly score:
+
+\[
+\text{AnomalyScore} = \frac{1}{m} \sum_{j \in Top10\%} d_j
+\]
+
+Cách lấy nhóm patch bất thường nhất giúp hệ thống tập trung vào vùng lỗi cục bộ. Nếu lấy trung bình toàn bộ patch, lỗi nhỏ có thể bị làm loãng bởi phần lớn bề mặt bình thường xung quanh.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{img/3.4.png}
+    \caption{Giao diện trang Anomaly hiển thị ảnh truy vấn, heatmap bất thường và ảnh normal gần nhất}
+\end{figure}
+
+Khi anomaly score vượt ngưỡng \texttt{anomaly\_threshold}, hệ thống đánh dấu ảnh là có khả năng bất thường. Ngoài ra, ma trận khoảng cách patch được reshape về lưới $16 \times 16$ để tạo heatmap. Heatmap được phóng to về kích thước ảnh gốc và phủ màu đỏ lên những vùng có điểm bất thường cao. Phần bounding box được lấy từ các vùng có giá trị heatmap cao, giúp người dùng nhìn nhanh vị trí nghi ngờ lỗi.
+
+\subsection{Diễn giải kết quả Verdict, Similarity, Anomaly và Likely defect}
+Giao diện Inspect hiển thị bốn thẻ kết quả chính. Mỗi thẻ có ý nghĩa riêng và không nên hiểu tất cả đều là kết luận tuyệt đối.
+
+\begin{itemize}
+    \item \textbf{Verdict:} kết luận tổng hợp dựa trên anomaly score và anomaly threshold. Nếu anomaly score thấp hơn ngưỡng, hệ thống trả PASS. Nếu vượt ngưỡng, hệ thống trả WARNING hoặc FAIL tùy mức độ vượt ngưỡng.
+    \item \textbf{Similarity:} điểm giống cao nhất giữa ảnh truy vấn và gallery. Điểm này phục vụ tìm kiếm ảnh tương tự và phát hiện near-duplicate.
+    \item \textbf{Anomaly:} điểm bất thường dựa trên patch embeddings. Điểm này phản ánh mức độ khác biệt cục bộ giữa ảnh truy vấn và tập ảnh normal.
+    \item \textbf{Likely defect:} loại lỗi gợi ý dựa trên nhãn của các ảnh tương tự nhất trong gallery. Đây là kết quả truy hồi, không phải bộ phân loại được huấn luyện có giám sát.
+\end{itemize}
+
+Vì các quyết định trên được xây dựng từ embedding pretrained và các luật ngưỡng đơn giản, kết quả có thể chưa hoàn toàn chính xác trong mọi trường hợp. Ví dụ, một ảnh lỗi rất giống ảnh lỗi trong gallery có thể có Similarity cao, nhưng nếu lỗi nằm ở vùng khó thấy thì Anomaly chưa chắc cao. Ngược lại, ảnh normal có ánh sáng hoặc góc chụp khác biệt cũng có thể tạo anomaly score cao. Do đó, người dùng cần xem kết quả cùng heatmap và các ảnh tương tự để đưa ra nhận xét hợp lý.
+
+\subsection{Gợi ý loại lỗi dựa trên truy hồi ảnh tương tự}
+Chức năng Likely defect được xây dựng từ kết quả truy hồi ảnh tương tự. Sau khi lấy danh sách top matches, hệ thống đọc nhãn từ tên thư mục chứa ảnh. Ví dụ, ảnh trong thư mục \texttt{tile\_crack} được hiểu là lỗi \texttt{crack}; ảnh trong \texttt{bottle\_contamination} được hiểu là lỗi \texttt{contamination}.
+
+Hệ thống cộng trọng số similarity theo từng loại lỗi:
+
+\[
+\text{score}(c) = \sum_{i \in TopK, label_i = c} \max(s_i, 0)
+\]
+
+Loại lỗi có tổng trọng số cao nhất được chọn làm gợi ý. Độ tin cậy retrieval được tính bằng tỉ lệ trọng số của loại lỗi đó trên tổng trọng số của tất cả top matches.
+
+Cách làm này có ưu điểm là đơn giản, không cần huấn luyện thêm classifier. Tuy nhiên, nó phụ thuộc mạnh vào chất lượng gallery. Nếu gallery ít ảnh, nhãn không cân bằng hoặc ảnh truy vấn khác miền dữ liệu, nhãn gợi ý có thể sai. Vì vậy trong demo, Likely defect nên được hiểu là ``loại lỗi gần giống nhất trong thư viện'', không phải nhãn phân loại chắc chắn.
+
+\subsection{Trực quan hóa feature map}
+Trang Map dùng PCA để chiếu embedding 384 chiều của ảnh gallery xuống không gian hai chiều. Mỗi điểm trên bản đồ tương ứng với một ảnh. Các điểm được tô màu theo loại lỗi, còn ảnh truy vấn nếu có sẽ được đánh dấu riêng bằng ký hiệu \texttt{Q}.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{img/3.5.png}
+    \caption{Giao diện trang Map trực quan hóa phân bố ảnh trong không gian đặc trưng PCA}
+\end{figure}
+
+Feature map giúp quan sát định tính chất lượng embedding của DINOv2. Nếu các ảnh cùng loại lỗi hoặc cùng trạng thái bề mặt nằm gần nhau, điều đó cho thấy DINOv2 đã học được đặc trưng có ý nghĩa đối với dữ liệu đang xét. Ngược lại, nếu các nhóm bị trộn lẫn nhiều, có thể do dữ liệu quá giống nhau, số lượng ảnh ít, hoặc đặc trưng pretrained chưa đủ phân biệt loại lỗi đó.
+
+Tuy nhiên, PCA chỉ là phép chiếu tuyến tính từ không gian 384 chiều xuống hai chiều, nên không thể giữ toàn bộ quan hệ khoảng cách ban đầu. Vì vậy feature map chỉ nên dùng để quan sát xu hướng tổng quát, không dùng thay cho các chỉ số định lượng.
+
+\subsection{Quy trình sử dụng demo}
+Quy trình sử dụng hệ thống trong một phiên demo có thể thực hiện theo các bước sau:
+
+\begin{enumerate}
+    \item Mở backend và frontend.
+    \item Chọn danh mục sản phẩm cần thử nghiệm, ví dụ \texttt{tile}.
+    \item Chuyển sang trang Index và nhấn \textit{Build index} nếu index chưa sẵn sàng.
+    \item Chuyển sang trang Inspect, tải ảnh truy vấn lên.
+    \item Điều chỉnh \textit{Top matches}, \textit{Duplicate threshold} và \textit{Anomaly threshold} nếu cần.
+    \item Nhấn \textit{Analyze} để chạy phân tích.
+    \item Xem kết quả tổng hợp ở Inspect, danh sách ảnh tương tự ở Retrieval, heatmap ở Anomaly và phân bố embedding ở Map.
+\end{enumerate}
+
+Với quy trình này, người dùng có thể minh họa được cả hai nhóm năng lực chính của DINOv2: biểu diễn toàn ảnh cho truy hồi ảnh và biểu diễn patch cho phân tích bất thường cục bộ.
+
+\subsection{Nhận xét về kết quả và giới hạn của hệ thống}
+Hệ thống demo cho thấy DINOv2 có thể được sử dụng hiệu quả như một backbone thị giác tổng quát. Chỉ với mô hình pretrained, không cần huấn luyện lại, hệ thống đã có thể tìm ảnh tương tự, phát hiện near-duplicate, tạo heatmap bất thường và hỗ trợ gợi ý loại lỗi.
+
+Tuy nhiên, hệ thống vẫn có một số giới hạn:
+
+\begin{itemize}
+    \item \textbf{Phụ thuộc vào dữ liệu tham chiếu:} Nếu tập normal chưa đủ đa dạng, hệ thống có thể báo bất thường với các biến thể bình thường chưa từng thấy.
+    \item \textbf{Ngưỡng cần hiệu chỉnh:} Duplicate threshold và anomaly threshold không nên dùng cố định cho mọi loại sản phẩm. Mỗi danh mục nên có ngưỡng riêng dựa trên tập validation.
+    \item \textbf{Likely defect chỉ là truy hồi:} Nhãn lỗi được suy ra từ ảnh gần nhất, không phải kết quả từ một classifier được huấn luyện có giám sát.
+    \item \textbf{Heatmap có độ phân giải giới hạn:} Với ảnh $224 \times 224$ và patch size 14, heatmap ban đầu chỉ có kích thước $16 \times 16$, nên vị trí lỗi chỉ mang tính xấp xỉ.
+    \item \textbf{Chưa đánh giá định lượng đầy đủ:} Demo hiện chủ yếu phục vụ minh họa. Để triển khai thực tế, cần thêm tập test, nhãn ground-truth và các chỉ số như precision, recall, F1-score hoặc AUROC.
+\end{itemize}
+
+Những giới hạn này không làm mất ý nghĩa của demo, mà cho thấy hướng phát triển tiếp theo: bổ sung dữ liệu, hiệu chỉnh ngưỡng theo từng danh mục, đánh giá định lượng và có thể kết hợp thêm một bộ phân loại nhẹ phía trên embedding DINOv2 nếu cần độ chính xác cao hơn.

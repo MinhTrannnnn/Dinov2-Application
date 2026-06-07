@@ -15,6 +15,7 @@ body {
   min-width: 320px;
   min-height: 100vh;
   background: #ffffff;
+  overflow: hidden;
 }
 
 button,
@@ -32,19 +33,19 @@ button:disabled {
 }
 
 .app-shell {
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .top-nav {
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 10;
-  height: 64px;
+  height: 52px;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 24px;
-  padding: 0 32px;
+  padding: 0 24px;
   background: rgba(255, 255, 255, 0.92);
   border-bottom: 1px solid #e5e7eb;
   backdrop-filter: blur(12px);
@@ -66,8 +67,8 @@ button:disabled {
 .brand-mark {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   border-radius: 999px;
   color: #ffffff;
   background: #111111;
@@ -77,14 +78,14 @@ button:disabled {
 .nav-pills {
   display: inline-flex;
   gap: 4px;
-  padding: 6px;
+  padding: 4px;
   border-radius: 999px;
   background: #f8f9fa;
 }
 
 .nav-pill {
   border: 0;
-  padding: 8px 14px;
+  padding: 7px 13px;
   border-radius: 8px;
   background: transparent;
   color: #6b7280;
@@ -118,7 +119,12 @@ button:disabled {
 .workspace {
   width: min(1240px, calc(100% - 48px));
   margin: 0 auto;
-  padding: 48px 0 72px;
+  height: calc(100vh - 52px);
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
 }
 
 .page-title {
@@ -126,11 +132,12 @@ button:disabled {
   align-items: flex-end;
   justify-content: space-between;
   gap: 24px;
-  margin-bottom: 24px;
+  margin-bottom: 0;
+  flex: 0 0 auto;
 }
 
 .eyebrow {
-  margin: 0 0 8px;
+  margin: 0 0 3px;
   color: #6b7280;
   font-size: 13px;
   font-weight: 600;
@@ -145,8 +152,8 @@ p {
 h1 {
   max-width: 760px;
   margin-bottom: 0;
-  font-size: 48px;
-  line-height: 1.08;
+  font-size: 30px;
+  line-height: 1.05;
   font-weight: 650;
 }
 
@@ -160,9 +167,9 @@ h2 {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
-  padding: 12px 14px;
-  margin-bottom: 16px;
+  min-height: 36px;
+  padding: 8px 12px;
+  margin-bottom: 0;
   border: 1px solid #fde68a;
   border-radius: 8px;
   background: #fffbeb;
@@ -173,23 +180,25 @@ h2 {
 .metrics-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 0;
+  flex: 0 0 auto;
 }
 
 .metrics-grid.compact .metric-card {
-  min-height: 78px;
-  padding: 14px;
+  min-height: 54px;
+  padding: 9px 12px;
 }
 
 .quick-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  min-height: 64px;
-  padding: 14px 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  margin-bottom: 0;
+  flex: 0 0 auto;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f5f5f5;
@@ -197,7 +206,7 @@ h2 {
 
 .category-select {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 150px;
   color: #6b7280;
   font-size: 13px;
@@ -205,7 +214,7 @@ h2 {
 }
 
 .category-select select {
-  height: 40px;
+  height: 32px;
   padding: 0 12px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -216,12 +225,12 @@ h2 {
 
 .quick-actions div {
   display: grid;
-  gap: 3px;
+  gap: 1px;
 }
 
 .quick-actions span {
   color: #6b7280;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .metric-card,
@@ -234,7 +243,7 @@ h2 {
 .metric-card {
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 8px 10px;
+  gap: 4px 8px;
   padding: 16px;
   min-height: 92px;
 }
@@ -245,25 +254,29 @@ h2 {
 
 .metric-card span {
   color: #6b7280;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .metric-card strong {
   grid-column: 1 / -1;
   overflow-wrap: anywhere;
-  font-size: 22px;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .main-grid,
 .page-grid {
   display: grid;
-  gap: 16px;
-  align-items: start;
+  gap: 10px;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .page-grid {
   grid-template-columns: minmax(0, 1fr);
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .page-grid.two {
@@ -271,7 +284,7 @@ h2 {
 }
 
 .page-grid.inspect {
-  grid-template-columns: 380px minmax(0, 1fr);
+  grid-template-columns: 320px minmax(0, 1fr);
 }
 
 .page-grid.retrieval,
@@ -279,16 +292,44 @@ h2 {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.page-grid.retrieval {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.page-grid.anomaly {
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.page-grid.anomaly .decision-panel {
+  grid-column: 1 / -1;
+}
+
+.page-grid.two > .panel,
+.page-grid.retrieval > .panel,
+.page-grid.anomaly > .panel,
+.page-grid:not(.inspect):not(.retrieval):not(.anomaly):not(.two) > .panel {
+  overflow: hidden;
+}
+
+.page-grid.two > .panel:nth-child(2),
+.page-grid.retrieval > .panel:nth-child(2),
+.page-grid:not(.inspect):not(.retrieval):not(.anomaly):not(.two) > .panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .panel {
-  padding: 20px;
+  min-height: 0;
+  padding: 12px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .panel-heading {
   display: flex;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 16px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .panel-heading p {
@@ -298,15 +339,18 @@ h2 {
 }
 
 .control-panel {
-  position: sticky;
-  top: 80px;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(128px, 1fr) auto;
+  overflow: hidden;
 }
 
 .dropzone {
   display: grid;
   place-items: center;
   width: 100%;
-  aspect-ratio: 1 / 1;
+  min-height: 0;
+  aspect-ratio: auto;
   border: 1px dashed #d1d5db;
   border-radius: 8px;
   background: #f8f9fa;
@@ -340,20 +384,20 @@ h2 {
 
 .controls {
   display: grid;
-  gap: 16px;
-  margin-top: 18px;
+  gap: 9px;
+  margin-top: 10px;
 }
 
 .controls label {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   color: #374151;
   font-size: 14px;
   font-weight: 600;
 }
 
 .controls input[type="number"] {
-  height: 40px;
+  height: 34px;
   width: 100%;
   padding: 0 12px;
   border: 1px solid #e5e7eb;
@@ -369,14 +413,14 @@ h2 {
 .button-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
 }
 
 .primary-button,
 .secondary-button {
   justify-content: center;
-  min-height: 40px;
-  padding: 0 16px;
+  min-height: 34px;
+  padding: 0 12px;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 650;
@@ -396,13 +440,15 @@ h2 {
 
 .results-column {
   display: grid;
-  gap: 16px;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
 }
 
 .decision-panel {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
   background: #f5f5f5;
 }
 
@@ -413,11 +459,11 @@ h2 {
 
 .decision-card {
   display: grid;
-  grid-template-columns: 36px 1fr;
-  gap: 12px;
+  grid-template-columns: 32px 1fr;
+  gap: 10px;
   align-items: center;
-  min-height: 120px;
-  padding: 16px;
+  min-height: 78px;
+  padding: 10px;
   border-radius: 8px;
   background: #ffffff;
   min-width: 0;
@@ -426,8 +472,8 @@ h2 {
 .decision-icon {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
   background: #ecfdf5;
   color: #047857;
@@ -468,7 +514,7 @@ h2 {
   display: block;
   margin: 2px 0;
   overflow-wrap: anywhere;
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
 }
 
@@ -479,13 +525,23 @@ h2 {
 .visual-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
+  min-height: 0;
+  height: 100%;
+}
+
+.visual-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .image-frame {
   position: relative;
   min-width: 0;
-  aspect-ratio: 1 / 1;
+  min-height: 0;
+  height: 100%;
+  aspect-ratio: auto;
   margin: 0;
   overflow: hidden;
   border-radius: 8px;
@@ -525,13 +581,13 @@ h2 {
 
 .normal-card {
   display: grid;
-  grid-template-columns: 120px 1fr;
+  grid-template-columns: 92px 1fr;
   gap: 12px;
   align-items: center;
 }
 
 .normal-card img {
-  width: 120px;
+  width: 92px;
   aspect-ratio: 1 / 1;
   object-fit: cover;
   border: 1px solid #e5e7eb;
@@ -545,7 +601,7 @@ h2 {
 }
 
 .normal-card strong {
-  font-size: 24px;
+  font-size: 20px;
 }
 
 .normal-card span {
@@ -558,7 +614,10 @@ h2 {
 
 .feature-map-wrap {
   display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
+  height: 100%;
+  min-height: 0;
 }
 
 .map-legend {
@@ -594,7 +653,8 @@ h2 {
 
 .feature-map {
   position: relative;
-  min-height: 220px;
+  min-height: 0;
+  height: 100%;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background:
@@ -606,7 +666,7 @@ h2 {
 }
 
 .feature-map.large {
-  min-height: 420px;
+  min-height: 0;
 }
 
 .map-point {
@@ -669,7 +729,7 @@ h2 {
 
 .detail-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 
 .detail-row {
@@ -677,8 +737,8 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 44px;
-  padding: 10px 12px;
+  min-height: 38px;
+  padding: 8px 10px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #f8f9fa;
@@ -699,7 +759,7 @@ h2 {
   display: grid;
   place-items: center;
   width: 100%;
-  min-height: 160px;
+  min-height: 100%;
   color: #898989;
   font-size: 14px;
   text-align: center;
@@ -707,8 +767,11 @@ h2 {
 
 .matches-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  max-height: 100%;
+  overflow: auto;
+  padding-right: 2px;
 }
 
 .match-card {
@@ -720,7 +783,7 @@ h2 {
 
 .match-card img {
   display: block;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
 }
 
 .match-card div {
@@ -752,6 +815,16 @@ h2 {
 }
 
 @media (max-width: 980px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
   .top-nav {
     height: auto;
     grid-template-columns: 1fr auto;
@@ -768,6 +841,8 @@ h2 {
   .workspace {
     width: min(100% - 28px, 760px);
     padding-top: 32px;
+    height: auto;
+    overflow: visible;
   }
 
   .page-title {
@@ -790,6 +865,28 @@ h2 {
   .decision-panel.mode-anomaly,
   .split-grid {
     grid-template-columns: 1fr;
+  }
+
+  .page-grid,
+  .results-column,
+  .control-panel,
+  .visual-panel {
+    overflow: visible;
+  }
+
+  .page-grid {
+    flex: initial;
+  }
+
+  .dropzone,
+  .image-frame {
+    aspect-ratio: 1 / 1;
+    height: auto;
+  }
+
+  .feature-map,
+  .feature-map.large {
+    min-height: 360px;
   }
 
   .quick-actions {
